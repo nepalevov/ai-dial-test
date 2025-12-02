@@ -21,7 +21,7 @@ jobs:
                 "issue_type": "pull-request",
                 "repository": "nepalevov/ci",
                 "static_args": [
-                  "application=${{ github.event.repository.name }}"
+                  "application=ai-dial-chat-themes"
                 ]
               }
             ]
