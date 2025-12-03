@@ -3,8 +3,8 @@ set -euo pipefail
 IFS=$'\n\t'
 
 # Directories
-TOOLS_DIR=/tmp/e2e-tools # directory to store downloaded tools
-NVM_DIR=${NVM_DIR:-"${HOME}/.nvm"}
+TOOLS_DIR=/tmp/e2e-tools                       # directory to store downloaded tools
+NVM_DIR=${NVM_DIR:-"${HOME}/.nvm"}             # nvm installation directory
 ARTIFACTS_DIR=${ARTIFACTS_DIR:-"/tmp/reports"} # directory to store generated Allure reports
 TESTS_DIR=${TESTS_DIR:-""}                     # directory to use as the tests workspace; if empty, a temp dir will be created
 
@@ -200,7 +200,6 @@ install_test_dependencies() {
   install_allure
   pushd "${TESTS_DIR}" >/dev/null
   install_playwright
-  # npm ci # TODO: remove after debugging
   popd >/dev/null
 }
 

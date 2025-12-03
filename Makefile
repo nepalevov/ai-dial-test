@@ -1,6 +1,6 @@
 # Path to store test artifacts
 ARTIFACTS_DIR ?= /tmp/reports
-TESTS_DIR ?=
+TESTS_DIR ?= /tmp/$(or $(GITHUB_RUN_ID),$(notdir $(CURDIR)))
 KEEP_TESTS_DIR ?= 1
 
 .ONESHELL:
