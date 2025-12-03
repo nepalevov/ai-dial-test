@@ -1,7 +1,7 @@
 # Path to store test artifacts
-ARTIFACT_ROOT ?= /tmp/reports
-TESTS_DIR ?= $(if $(GITHUB_RUN_ID),/tmp/tests.$(GITHUB_RUN_ID),/tmp/$(shell basename $(shell pwd)))
-KEEP_TESTS_DIR ?= 0
+ARTIFACTS_DIR ?= /tmp/reports
+TESTS_DIR ?=
+KEEP_TESTS_DIR ?= 1
 
 .ONESHELL:
 .EXPORT_ALL_VARIABLES:

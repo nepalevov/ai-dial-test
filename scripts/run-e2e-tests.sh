@@ -3,22 +3,22 @@ set -euo pipefail
 IFS=$'\n\t'
 
 # Directories
-TOOLS_DIR=${TMPDIR:-/tmp}/e2e-tools                           # directory to store downloaded tools
+TOOLS_DIR=/tmp/e2e-tools # directory to store downloaded tools
 NVM_DIR=${NVM_DIR:-"${HOME}/.nvm"}
-ARTIFACT_ROOT=${ARTIFACT_ROOT:-"${TMPDIR:-/tmp}/artifacts"}   # directory to store generated Allure reports
-TESTS_DIR=${TESTS_DIR:-""}                                    # directory to use as the tests workspace; if empty, a temp dir will be created
+ARTIFACTS_DIR=${ARTIFACTS_DIR:-"/tmp/reports"} # directory to store generated Allure reports
+TESTS_DIR=${TESTS_DIR:-""}                     # directory to use as the tests workspace; if empty, a temp dir will be created
 
 # Versions
 NODE_VERSION=${NODE_VERSION:-"lts/*"}
-PLAYWRIGHT_VERSION="1.57.0"                                   # @playwright/test version
-ALLURE_VERSION="2.24.0"                                       # Allure CLI distribution tag
+PLAYWRIGHT_VERSION=${PLAYWRIGHT_VERSION:-"1.57.0"} # @playwright/test version
+ALLURE_VERSION=${ALLURE_VERSION:-"2.24.0"}         # Allure CLI distribution tag
 ALLURE_BIN="${TOOLS_DIR}/allure-${ALLURE_VERSION}/bin/allure"
 
 # Tests
-TESTS_TARBALL=${TESTS_TARBALL:-"https://github.com/nepalevov/ai-dial-chat/archive/refs/heads/development.tar.gz"} # tar.gz URL with the tests source code
-DOTENV_FILE=${DOTENV_FILE:-"apps/chat-e2e/.env.ci"}                                                               # relative path inside the tests repo containing env vars to be sourced
-SUITE=${TEST_SUITE:-chat}
-KEEP_TESTS_DIR=${KEEP_TESTS_DIR:-0}                                                                               # when set to 1, skip deleting TESTS_DIR on exit
+TESTS_TARBALL=${TESTS_TARBALL:-"https://github.com/nepalevov/ai-dial-chat/archive/refs/heads/development.tar.gz"} # An URL to tar.gz with the tests source code
+DOTENV_FILE=${DOTENV_FILE:-"apps/chat-e2e/.env.ci"}                                                               # Relative path inside the tests repo containing env vars to be sourced
+SUITE=${TEST_SUITE:-chat}                                                                                         # Test suite to execute (chat, overlay, or nx target suffix)
+KEEP_TESTS_DIR=${KEEP_TESTS_DIR:-0}                                                                               # Do not delete downloaded test workspace on exit
 NX_EXTRA_ARGS=()
 
 usage() {
@@ -26,12 +26,12 @@ usage() {
 Usage: run-e2e-tests.sh [options] [-- extra nx args]
 
 Options:
-  --suite <name>         Test suite to execute (chat, overlay, or nx target suffix)
-  --keep-tests-dir         Do not delete downloaded test workspace on exit
-  --tarball <url>        Override the tests tarball URL
-  --dotenv <path>        Override the relative dotenv file path inside the tests repo
-  --artifacts <path>     Directory where Allure reports will be written
-  --help                 Show this help message
+  --suite <name>              Test suite to execute (chat, overlay, or nx target suffix)
+  --keep-tests-dir            Do not delete downloaded test workspace on exit
+  --tarball <url>             An URL to tar.gz with the tests source code
+  --dotenv <path>             Relative path inside the tests repo containing env vars to be sourced
+  --artifacts-dir <path>      Directory where Allure reports will be written
+  --help                      Show this help message
 
 Any arguments passed after `--` are forwarded to the `npx nx run ...` command.
 EOF
@@ -64,9 +64,9 @@ while [[ $# -gt 0 ]]; do
     DOTENV_FILE="$2"
     shift 2
     ;;
-  --artifacts)
-    [[ $# -ge 2 ]] || die "--artifacts requires a value"
-    ARTIFACT_ROOT="$2"
+  --artifacts-dir)
+    [[ $# -ge 2 ]] || die "--artifacts-dir requires a value"
+    ARTIFACTS_DIR="$2"
     shift 2
     ;;
   --keep-tests-dir)
@@ -112,10 +112,9 @@ ALLURE_RESULTS_PATH=${ALLURE_RESULTS_PATH:-${ALLURE_RESULTS_PATH_DEFAULT}}
 
 require_cmd curl
 require_cmd tar
-require_cmd mktemp
 
 cleanup() {
-  if [[ ${KEEP_TESTS_DIR} -eq 0 && -n "${TESTS_DIR:-}" && -d "${TESTS_DIR}" ]]; then
+  if [[ ${KEEP_TESTS_DIR} -eq 0 && -n "${TESTS_DIR}" && -d "${TESTS_DIR}" ]]; then
     rm -rf "${TESTS_DIR}"
   fi
 }
@@ -132,13 +131,9 @@ setup_workspace() {
 }
 
 fetch_tests() {
-  local tmp_tar
-  tmp_tar=$(mktemp -p "${TESTS_DIR}" "tests.XXXXXX.tar.gz")
   log "Downloading test sources from ${TESTS_TARBALL}"
-  curl -fsSL --retry 5 --retry-delay 2 \
-    "${TESTS_TARBALL}" -o "${tmp_tar}"
-  tar -xzf "${tmp_tar}" --strip-components=1 -C "${TESTS_DIR}"
-  rm -f "${tmp_tar}"
+  curl -fsSL --retry 5 --retry-delay 2 "${TESTS_TARBALL}" |
+    tar -xzf - --strip-components=1 -C "${TESTS_DIR}"
 }
 
 load_nvm() {
@@ -147,7 +142,7 @@ load_nvm() {
     . "${NVM_DIR}/nvm.sh"
     return 0
   fi
-  die "nvm not found in ${NVM_DIR}"
+  warn "nvm not found in ${NVM_DIR}"
 }
 
 ensure_node() {
@@ -173,17 +168,12 @@ install_allure() {
   if [[ -x "${ALLURE_BIN}" ]]; then
     log "Allure CLI already present at ${ALLURE_BIN}"
     return
-  else
-    log "Installing Allure CLI ${ALLURE_VERSION}"
-    mkdir -p "${TOOLS_DIR}"
-    local tmp_tar
-    tmp_tar=$(mktemp -p "${TESTS_DIR}" --tmpdir "allure.XXXXXX.tgz")
-    local allure_url="https://github.com/allure-framework/allure2/releases/download/${ALLURE_VERSION}/allure-${ALLURE_VERSION}.tgz"
-    curl -fsSL "${allure_url}" -o "${tmp_tar}"
-    tar -xzf "${tmp_tar}" -C "${TOOLS_DIR}"
-    rm -f "${tmp_tar}"
-    log "Allure CLI version: $("${ALLURE_BIN}" --version)"
   fi
+  log "Installing Allure CLI ${ALLURE_VERSION}"
+  mkdir -p "${TOOLS_DIR}"
+  local allure_url="https://github.com/allure-framework/allure2/releases/download/${ALLURE_VERSION}/allure-${ALLURE_VERSION}.tgz"
+  curl -fsSL --retry 5 --retry-delay 2 "${allure_url}" | tar -xzf - -C "${TOOLS_DIR}"
+  log "Allure CLI version: $("${ALLURE_BIN}" --version)"
 }
 
 install_playwright() {
@@ -192,13 +182,12 @@ install_playwright() {
   if [[ "${PLAYWRIGHT_VERSION}" != "latest" && "${version}" = *"${PLAYWRIGHT_VERSION}"* ]]; then
     log "Playwright already installed with version ${version}"
     return
-  else
-    log "Installing Playwright ${PLAYWRIGHT_VERSION}"
-    npm install -D @playwright/test@"${PLAYWRIGHT_VERSION}" allure-playwright
-    npx --no-install playwright --version
-    npx playwright install --with-deps
-    log "Playwright version: $(npx playwright --version)"
   fi
+  log "Installing Playwright ${PLAYWRIGHT_VERSION}"
+  npm install -D @playwright/test@"${PLAYWRIGHT_VERSION}" allure-playwright
+  npx --no-install playwright --version
+  npx playwright install --with-deps
+  log "Playwright version: $(npx playwright --version)"
 }
 
 install_test_dependencies() {
@@ -211,7 +200,7 @@ install_test_dependencies() {
   install_allure
   pushd "${TESTS_DIR}" >/dev/null
   install_playwright
-  npm ci
+  # npm ci # TODO: remove after debugging
   popd >/dev/null
 }
 
@@ -243,15 +232,13 @@ run_tests() {
 }
 
 generate_report() {
-  pushd "${TESTS_DIR}" >/dev/null
-  mkdir -p "${ARTIFACT_ROOT}/${SUITE}"
-  if [[ ! -d "${ALLURE_RESULTS_PATH}" ]]; then
-    popd >/dev/null
+  local results_dir="${TESTS_DIR}/${ALLURE_RESULTS_PATH#./}"
+  if [[ ! -d "${results_dir}" ]]; then
     return 1
   fi
+  mkdir -p "${ARTIFACTS_DIR}/${SUITE}"
   log "Generating Allure report for ${SUITE}"
-  "${ALLURE_BIN}" generate "${ALLURE_RESULTS_PATH}" -o "${ARTIFACT_ROOT}/${SUITE}" --clean
-  popd >/dev/null
+  "${ALLURE_BIN}" generate "${results_dir}" -o "${ARTIFACTS_DIR}/${SUITE}" --clean
 }
 
 main() {
