@@ -1,0 +1,16 @@
+name: test
+description: "Run end-to-end tests against a specified environment"
+inputs:
+  debug_enabled:
+    description: "Run the build with tmate debugging enabled (https://github.com/marketplace/actions/debugging-with-tmate)"
+    required: false
+
+runs:
+  using: "composite"
+  steps:
+    # Enable tmate debugging of manually-triggered workflows if the input option was provided
+    - name: Setup tmate session
+      if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
+      uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101 # v3.23
+      with:
+        limit-access-to-actor: true
