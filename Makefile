@@ -1,9 +1,8 @@
 # Path to store test artifacts
-ARTIFACT_ROOT ?= /tmp/reports
-TESTS_DIR = /tmp/tests.huh
-KEEP_TESTS_DIR = 1
+ARTIFACTS_DIR ?= /tmp/reports
+TESTS_DIR ?= /tmp/$(or $(GITHUB_RUN_ID),$(notdir $(CURDIR)))
+KEEP_TESTS_DIR ?= 0
 
-.ONESHELL:
 .EXPORT_ALL_VARIABLES:
 
 .PHONY: build run lint test test_chat test_overlay help
