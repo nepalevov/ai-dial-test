@@ -1,16 +1,42 @@
 name: test
-description: "Run end-to-end tests against a specified environment"
+description: "Run e2e-tests on GitHub"
 inputs:
-  debug_enabled:
-    description: "Run the build with tmate debugging enabled (https://github.com/marketplace/actions/debugging-with-tmate)"
-    required: false
+  environment-name:
+    description: "GitHub environment name to use. An abstraction to conveniently store secrets and variables"
+    default: "e2e-test"
+  environment-domain:
+    description: "Domain zone for the environment, e.g., `review.example.com`. Will be used to construct application URLs"
+    required: true
+  test-repository:
+    description: "GitHub repository with e2e-tests source code"
+    default: "nepalevov/ai-dial-chat"
+  test-branch:
+    description: "Git branch name of the e2e-tests repository"
+    default: "development"
+  dotenv-file:
+    description: "Relative path to dotenv file with configuration variables for e2e-tests in e2e-tests repository. Will be sourced before running tests"
+    default: "apps/chat-e2e/.env.ci"
+  java-distribution:
+    description: "Java distribution"
+    default: "temurin"
+  java-version:
+    description: "Java version"
+    default: "17"
+  node-version:
+    description: "NodeJS version to use"
+    default: "lts/*"
+  playwright-version:
+    description: "Playwright version"
+    default: "latest"
+  allure-version:
+    description: "Allure Report version"
+    default: "2.24.0"
+  report-prefix:
+    description: "Test report name prefix"
+    default: ${{ github.run_id }}
 
 runs:
   using: "composite"
   steps:
-    # Enable tmate debugging of manually-triggered workflows if the input option was provided
-    - name: Setup tmate session
-      if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
-      uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101 # v3.23
-      with:
-        limit-access-to-actor: true
+    - run: echo "Running e2e-tests action"
+      shell: bash
