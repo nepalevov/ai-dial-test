@@ -185,7 +185,6 @@ install_playwright() {
   fi
   log "Installing Playwright ${PLAYWRIGHT_VERSION}"
   npm install -D @playwright/test@"${PLAYWRIGHT_VERSION}" allure-playwright
-  npx --no-install playwright --version
   npx playwright install --with-deps
   log "Playwright version: $(npx playwright --version)"
 }

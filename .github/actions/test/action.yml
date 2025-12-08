@@ -1,0 +1,161 @@
+name: test
+description: "Run e2e-tests on GitHub"
+inputs:
+  environment-url:
+    description: "Application URL of the environment, e.g., `https://chat-my-repo-pr-1.example.com`"
+    required: true
+  test-repository:
+    description: "GitHub repository with e2e-tests source code"
+    default: "nepalevov/ai-dial-chat"
+  test-branch:
+    description: "Git branch name of the e2e-tests repository"
+    default: "development"
+  dotenv-file:
+    description: "Relative path to dotenv file with configuration variables for e2e-tests in e2e-tests repository. Will be sourced before running tests"
+    default: "apps/chat-e2e/.env.ci"
+  java-distribution:
+    description: "Java distribution"
+    default: "temurin"
+  java-version:
+    description: "Java version"
+    default: "17"
+  node-version:
+    description: "NodeJS version to use"
+    default: "lts/*"
+  playwright-version:
+    description: "Playwright version"
+    default: "latest"
+  allure-version:
+    description: "Allure Report version"
+    default: "2.24.0"
+  report-prefix:
+    description: "Test report name prefix"
+    default: ${{ github.run_id }}
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      with:
+        repository: ${{ inputs.test-repository }}
+        ref: ${{ inputs.test-branch }}
+        lfs: true
+        persist-credentials: false
+    - uses: falti/dotenv-action@a33be0b8cf6a6e6f1b82cc9f3782061ab1022be5 # v1.1.4
+      with:
+        path: ${{ inputs.dotenv-file }}
+        log-variables: true
+        export-variables: true
+        keys-case: bypass
+    - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+      with:
+        node-version: ${{ inputs.node-version }}
+    - uses: actions/setup-java@7a6d8a8234af8eb26422e24e3006232cccaa061b # v4.6.0
+      with:
+        distribution: ${{ inputs.java-distribution }}
+        java-version: ${{ inputs.java-version }}
+    - name: Install Allure CLI
+      run: |
+        curl -fsSL --retry 5 --retry-delay 2 https://github.com/allure-framework/allure2/releases/download/${ALLURE_VERSION}/allure_${ALLURE_VERSION}-1_all.deb -o /tmp/allure.deb
+        sudo dpkg -i /tmp/allure.deb
+        echo "Allure CLI version: $(allure --version)"
+      shell: bash
+      env:
+        ALLURE_VERSION: ${{ inputs.allure-version }}
+    - name: Install Playwright
+      run: |
+        npm install -D @playwright/test@${{ inputs.playwright-version }} allure-playwright
+        npx playwright install --with-deps
+        echo "Playwright version: $(npx playwright --version)"
+      shell: bash
+    - name: Wait for environment
+      run: |
+        echo "Expected environment URL ${ENVIRONMENT_URL}, waiting to be available..."
+        env_hostname=$(echo "$ENVIRONMENT_URL" | awk -F/ '{print $3}')
+
+        wait_for_dns() {
+            local domain="$1"
+            local attempt=0
+            local attempt_limit=90  # retry resolve up to 15 minutes
+            local attempt_delay=10  # 10 seconds between resolve attempts
+
+            if [ -z "$domain" ]; then
+                echo "Specify domain name as first argument" >&2
+                return 1
+            fi
+
+            local base_domain=$(echo "$domain" | sed -E 's/[^.]+\.(.+)/\1/')
+            echo "Query Google public DNS for $base_domain nameservers"
+            local ns_servers=$(dig +short @8.8.8.8 ns $base_domain)
+            if [ -n "$ns_servers" ]; then
+                echo "Detected nameservers for $base_domain:"
+                echo "$ns_servers"
+            else
+                echo "Unable to detect nameservers for $base_domain" >&2
+                return 1
+            fi
+
+            local ns
+            local result
+            for ns in $ns_servers
+            do
+                while true
+                    do
+                    echo "Query $ns for $domain"
+                    result=$(dig +short @${ns} "$domain")
+                    if [ ! -z "$result" ]; then
+                        if echo "$result" | grep -Eq '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'; then
+                            echo "$result"
+                            break
+                        fi
+                    fi
+                    attempt=$((attempt+1))
+                    if [ $attempt -le $attempt_limit ]; then
+                        sleep $attempt_delay
+                    else
+                        echo "Unable to resolve $domain" >&2
+                        return 1
+                    fi
+                done
+            done
+        }
+
+        wait_for_dns ${env_hostname}
+
+        curl --retry 30 --retry-delay 10 --retry-all-errors --fail --insecure --no-progress-meter --location --head -o /dev/null -w "%{http_code}\n" -X GET "${ENVIRONMENT_URL}"/api/health
+      shell: bash
+      env:
+        ENVIRONMENT_URL: ${{ inputs.environment-url }}
+    - run: echo $E2E_USERNAME
+      shell: bash
+    - name: Run tests
+      run: |
+        echo "URL to run e2e tests against:                 ${ENVIRONMENT_URL}"
+        echo "URL to run overlay e2e tests against:         ${NEXT_PUBLIC_OVERLAY_HOST}"
+        echo "Config for arithmetic e2e api tests:          ${ENTITY_ARITHMETIC_REQUEST_FOR_API_TESTS}"
+        echo "Config for attachment request e2e api tests:  ${ENTITY_PLUS_ATTACHMENT_FOR_API_TESTS}"
+        echo "Config for attachment response e2e api tests: ${ENTITY_SIMPLE_REQUEST_FOR_API_TESTS}"
+        echo "Simple requests model for e2e tests:          ${SIMPLE_REQUEST_MODEL}"
+        npx nx run chat-e2e:e2e:chat --configuration=production --output-style=stream --skipInstall
+      shell: bash
+      env:
+        ENVIRONMENT_URL: ${{ inputs.environment-url }}
+        E2E_ADMIN: ${{ env.E2E_ADMIN }}
+        E2E_USERNAME: ${{ env.E2E_USERNAME }}
+        E2E_OVERLAY_USERNAME: ${{ env.E2E_OVERLAY_USERNAME }}
+        E2E_PASSWORD: ${{ env.E2E_PASSWORD }}
+        NEXT_PUBLIC_OVERLAY_HOST: ${{ inputs.environment-url }}
+        NEXT_PUBLIC_OVERLAY_USER_BUCKET: ${{ secrets.NEXT_PUBLIC_OVERLAY_USER_BUCKET }}
+    - name: Generate Allure Report
+      if: ${{ !cancelled() }}
+      run: |
+        allure generate ./apps/chat-e2e/allure-chat-results -o ./apps/chat-e2e/allure-chat-report --clean
+      shell: bash
+    - name: Upload Allure Report
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ !cancelled() }}
+      with:
+        name: "${{ inputs.report-prefix }}-chat"
+        path: |
+          apps/chat-e2e/allure-chat-report
+        retention-days: 30
