@@ -145,7 +145,7 @@ runs:
         E2E_OVERLAY_USERNAME: ${{ env.E2E_OVERLAY_USERNAME }}
         E2E_PASSWORD: ${{ env.E2E_PASSWORD }}
         NEXT_PUBLIC_OVERLAY_HOST: ${{ inputs.environment-url }}
-        NEXT_PUBLIC_OVERLAY_USER_BUCKET: ${{ secrets.NEXT_PUBLIC_OVERLAY_USER_BUCKET }}
+        NEXT_PUBLIC_OVERLAY_USER_BUCKET: ${{ env.NEXT_PUBLIC_OVERLAY_USER_BUCKET }}
     - name: Generate Allure Report
       if: ${{ !cancelled() }}
       run: |
