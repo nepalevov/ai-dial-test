@@ -204,7 +204,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: ${{ !cancelled() }}
         with:
-          name: "${{ inputs.report-prefix }}-${{ github.run_id }}-${{ matrix.target }}"
+          name: "${{ inputs.report-prefix }}-${{ matrix.target }}"
           path: |
             apps/chat-e2e/allure-${{ matrix.target }}-report
           retention-days: 30
