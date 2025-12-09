@@ -47,11 +47,10 @@ runs:
         persist-credentials: false
     - uses: falti/dotenv-action@a33be0b8cf6a6e6f1b82cc9f3782061ab1022be5 # v1.1.4
       with:
-        path: ${{ inputs.dotenv-file }}
+        path: "${{ inputs.working-directory }}/${{ inputs.dotenv-file }}"
         log-variables: true
         export-variables: true
         keys-case: bypass
-      working-directory: ${{ inputs.working-directory }}
     - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
       with:
         node-version: ${{ inputs.node-version }}
@@ -165,6 +164,5 @@ runs:
       with:
         name: "${{ inputs.report-prefix }}-chat"
         path: |
-          apps/chat-e2e/allure-chat-report
+          ${{ inputs.working-directory }}/apps/chat-e2e/allure-chat-report
         retention-days: 30
-      working-directory: ${{ inputs.working-directory }}
