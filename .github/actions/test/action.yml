@@ -31,6 +31,9 @@ inputs:
   report-prefix:
     description: "Test report name prefix"
     default: ${{ github.run_id }}
+  working-directory:
+    description: "Working directory to run tests in"
+    default: "tests"
 
 runs:
   using: "composite"
@@ -39,8 +42,8 @@ runs:
       with:
         repository: ${{ inputs.test-repository }}
         ref: ${{ inputs.test-branch }}
+        path: ${{ inputs.working-directory }}
         lfs: true
-        clean: false
         persist-credentials: false
     - uses: falti/dotenv-action@a33be0b8cf6a6e6f1b82cc9f3782061ab1022be5 # v1.1.4
       with:
@@ -48,6 +51,7 @@ runs:
         log-variables: true
         export-variables: true
         keys-case: bypass
+      working-directory: ${{ inputs.working-directory }}
     - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
       with:
         node-version: ${{ inputs.node-version }}
@@ -69,6 +73,7 @@ runs:
         npx playwright install --with-deps
         echo "Playwright version: $(npx playwright --version)"
       shell: bash
+      working-directory: ${{ inputs.working-directory }}
     - name: Wait for environment
       run: |
         echo "Expected environment URL ${ENVIRONMENT_URL}, waiting to be available..."
@@ -131,7 +136,7 @@ runs:
       shell: bash
     - name: Run tests
       run: |
-        echo "URL to run e2e tests against:                 ${ENVIRONMENT_URL}"
+        echo "URL to run e2e tests against:                 ${E2E_HOST}"
         echo "URL to run overlay e2e tests against:         ${NEXT_PUBLIC_OVERLAY_HOST}"
         echo "Config for arithmetic e2e api tests:          ${ENTITY_ARITHMETIC_REQUEST_FOR_API_TESTS}"
         echo "Config for attachment request e2e api tests:  ${ENTITY_PLUS_ATTACHMENT_FOR_API_TESTS}"
@@ -139,8 +144,9 @@ runs:
         echo "Simple requests model for e2e tests:          ${SIMPLE_REQUEST_MODEL}"
         npx nx run chat-e2e:e2e:chat --configuration=production --output-style=stream --skipInstall
       shell: bash
+      working-directory: ${{ inputs.working-directory }}
       env:
-        ENVIRONMENT_URL: ${{ inputs.environment-url }}
+        E2E_HOST: ${{ inputs.environment-url }}
         E2E_ADMIN: ${{ env.E2E_ADMIN }}
         E2E_USERNAME: ${{ env.E2E_USERNAME }}
         E2E_OVERLAY_USERNAME: ${{ env.E2E_OVERLAY_USERNAME }}
@@ -152,6 +158,7 @@ runs:
       run: |
         allure generate ./apps/chat-e2e/allure-chat-results -o ./apps/chat-e2e/allure-chat-report --clean
       shell: bash
+      working-directory: ${{ inputs.working-directory }}
     - name: Upload Allure Report
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       if: ${{ !cancelled() }}
@@ -160,3 +167,4 @@ runs:
         path: |
           apps/chat-e2e/allure-chat-report
         retention-days: 30
+      working-directory: ${{ inputs.working-directory }}
